@@ -826,9 +826,7 @@ bool mysql_derived_prepare(THD *thd, LEX *lex, TABLE_LIST *derived)
   derived->dt_handler= derived->find_derived_handler(thd);
   if (derived->dt_handler)
   {
-    char query_buff[4096];
-    String derived_query(query_buff, sizeof(query_buff), thd->charset());
-    derived_query.length(0);
+    StringBuffer<4096> derived_query(thd->charset());
     derived->derived->print(&derived_query,
                             enum_query_type(QT_VIEW_INTERNAL | 
                                             QT_ITEM_ORIGINAL_FUNC_NULLIF |

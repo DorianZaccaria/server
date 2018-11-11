@@ -1239,13 +1239,14 @@ mysqld_show_create_get_fields(THD *thd, TABLE_LIST *table_list,
                               List<Item> *field_list, String *buffer)
 {
   bool error= TRUE;
+  LEX *lex= thd->lex;
   MEM_ROOT *mem_root= thd->mem_root;
   DBUG_ENTER("mysqld_show_create_get_fields");
   DBUG_PRINT("enter",("db: %s  table: %s",table_list->db.str,
                       table_list->table_name.str));
 
   /* We want to preserve the tree for views. */
-  thd->lex->context_analysis_only|= CONTEXT_ANALYSIS_ONLY_VIEW;
+  lex->context_analysis_only|= CONTEXT_ANALYSIS_ONLY_VIEW;
 
   {
     /*
@@ -1260,20 +1261,20 @@ mysqld_show_create_get_fields(THD *thd, TABLE_LIST *table_list,
     bool open_error=
       open_tables(thd, &table_list, &counter,
                   MYSQL_OPEN_FORCE_SHARED_HIGH_PRIO_MDL) ||
-      mysql_handle_derived(thd->lex, DT_INIT | DT_PREPARE);
+      mysql_handle_derived(lex, DT_INIT | DT_PREPARE);
     thd->pop_internal_handler();
     if (unlikely(open_error && (thd->killed || thd->is_error())))
       goto exit;
   }
 
   /* TODO: add environment variables show when it become possible */
-  if (thd->lex->table_type == TABLE_TYPE_VIEW && !table_list->view)
+  if (lex->table_type == TABLE_TYPE_VIEW && !table_list->view)
   {
     my_error(ER_WRONG_OBJECT, MYF(0),
              table_list->db.str, table_list->table_name.str, "VIEW");
     goto exit;
   }
-  else if (thd->lex->table_type == TABLE_TYPE_SEQUENCE &&
+  else if (lex->table_type == TABLE_TYPE_SEQUENCE &&
            table_list->table->s->table_type != TABLE_TYPE_SEQUENCE)
   {
     my_error(ER_NOT_SEQUENCE, MYF(0),
@@ -1288,7 +1289,7 @@ mysqld_show_create_get_fields(THD *thd, TABLE_LIST *table_list,
 
   if ((table_list->view ?
        show_create_view(thd, table_list, buffer) :
-       thd->lex->table_type == TABLE_TYPE_SEQUENCE ?
+       lex->table_type == TABLE_TYPE_SEQUENCE ?
        show_create_sequence(thd, table_list, buffer) :
        show_create_table(thd, table_list, buffer, NULL, WITHOUT_DB_NAME)))
     goto exit;
