@@ -307,7 +307,7 @@ Event_worker_thread::run(THD *thd, Event_queue_element_for_exec *event)
     goto end;
   }
 
-  thd->enable_slow_log= TRUE;
+  thd->slow_query_action= COUNT_AND_LOG;
 
   res= job_data.execute(thd, event->dropped);
 

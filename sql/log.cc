@@ -1318,7 +1318,7 @@ bool LOGGER::slow_log_print(THD *thd, const char *query, size_t query_length,
   uint user_host_len= 0;
   ulonglong query_utime, lock_utime;
 
-  DBUG_ASSERT(thd->enable_slow_log);
+  DBUG_ASSERT(thd->slow_query_action != SKIP);
   /*
     Print the message to the buffer if we have slow log enabled
   */

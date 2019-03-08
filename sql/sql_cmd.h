@@ -161,11 +161,10 @@ public:
   */
   virtual bool execute(THD *thd) = 0;
 
-  virtual bool log_slow_enabled_statement(const THD *thd) const;
+  virtual bool log_slow_enabled_statement(const THD *thd) const { return true; }
 
 protected:
-  Sql_cmd()
-  {}
+  Sql_cmd() {}
 
   virtual ~Sql_cmd()
   {

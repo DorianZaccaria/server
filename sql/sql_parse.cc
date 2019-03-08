@@ -1575,7 +1575,7 @@ bool dispatch_command(enum enum_server_command command, THD *thd,
     thd->variables.log_slow_disabled_statements defines which statements
     are logged to slow log
   */
-  thd->enable_slow_log= true;
+  thd->slow_query_action= COUNT_AND_LOG;
   thd->query_plan_flags= QPLAN_INIT;
   thd->lex->sql_command= SQLCOM_END; /* to avoid confusing VIEW detectors */
   thd->reset_kill_query();
@@ -2454,11 +2454,6 @@ dispatch_end:
     thd->packet.shrink(thd->variables.net_buffer_length); // Reclaim some memory
 
   thd->reset_kill_query();  /* Ensure that killed_errmsg is released */
-  /*
-    LEX::m_sql_cmd can point to Sql_cmd allocated on thd->mem_root.
-    Unlink it now, before freeing the root.
-  */
-  thd->lex->m_sql_cmd= NULL;
   free_root(thd->mem_root,MYF(MY_KEEP_PREALLOC));
 
 #if defined(ENABLED_PROFILING)
@@ -2480,32 +2475,6 @@ dispatch_end:
   DBUG_ASSERT(thd->abort_on_warning == 0);
   thd->lex->restore_set_statement_var();
   DBUG_RETURN(error);
-}
-
-
-static bool log_slow_enabled_statement(const THD *thd)
-{
-  /*
-    TODO-10.4: Add classes Sql_cmd_create_index and Sql_cmd_drop_index
-    for symmetry with other admin commands, so these statements can be
-    handled by this command:
-  */
-  if (thd->lex->m_sql_cmd)
-    return thd->lex->m_sql_cmd->log_slow_enabled_statement(thd);
-
-  /*
-    Currently CREATE INDEX or DROP INDEX cause a full table rebuild
-    and thus classify as slow administrative statements just like
-    ALTER TABLE.
-  */
-  if ((thd->lex->sql_command == SQLCOM_CREATE_INDEX ||
-       thd->lex->sql_command == SQLCOM_DROP_INDEX) &&
-      MY_TEST(thd->variables.log_slow_disabled_statements &
-              LOG_SLOW_DISABLE_ADMIN))
-    return true;
-
-  return global_system_variables.sql_log_slow &&
-         thd->variables.sql_log_slow;
 }
 
 
@@ -2536,7 +2505,7 @@ void log_slow_statement(THD *thd)
     sql_log_slow to be ON. So even if sql_log_slow is OFF, we still need to
     continue and increment long_query_count (and skip only logging, see below):
   */
-  if (!thd->enable_slow_log)
+  if (thd->slow_query_action == SKIP)
     goto end; // E.g. SP statement
 
   if ((thd->server_status &
@@ -2555,7 +2524,8 @@ void log_slow_statement(THD *thd)
   {
     thd->status_var.long_query_count++;
 
-    if (!log_slow_enabled_statement(thd))
+    if (!global_system_variables.sql_log_slow || !thd->variables.sql_log_slow ||
+        thd->slow_query_action != COUNT_AND_LOG)
       goto end;
 
     /*
@@ -3262,7 +3232,7 @@ bool Sql_cmd_call::execute(THD *thd)
       Instead we will log the executed statements to the slow log.
     */
     if (thd->variables.log_slow_disabled_statements & LOG_SLOW_DISABLE_CALL)
-      thd->enable_slow_log= 0;
+      thd->slow_query_action= SKIP;
   }
   return false;
 }
@@ -4448,6 +4418,10 @@ end_with_restore_list:
     res= mysql_alter_table(thd, &first_table->db, &first_table->table_name,
                            &create_info, first_table, &alter_info,
                            0, (ORDER*) 0, 0);
+    if (thd->slow_query_action != SKIP)
+      thd->slow_query_action=
+        thd->variables.log_slow_disabled_statements & LOG_SLOW_DISABLE_ADMIN
+        ? COUNT : COUNT_AND_LOG;
     break;
   }
 #ifdef HAVE_REPLICATION
@@ -6347,6 +6321,9 @@ end_with_restore_list:
   case SQLCOM_CALL:
     DBUG_ASSERT(lex->m_sql_cmd != NULL);
     res= lex->m_sql_cmd->execute(thd);
+    if (thd->slow_query_action != SKIP)
+      thd->slow_query_action= lex->m_sql_cmd->log_slow_enabled_statement(thd)
+                              ? COUNT_AND_LOG : COUNT;
     break;
   default:
 
@@ -7721,7 +7698,7 @@ void THD::reset_for_next_command(bool do_clear_error)
   if (opt_bin_log)
     reset_dynamic(&user_var_events);
   DBUG_ASSERT(user_var_events_alloc == &main_mem_root);
-  enable_slow_log= true;
+  slow_query_action= COUNT_AND_LOG;
   get_stmt_da()->reset_for_next_command();
   rand_used= 0;
   m_sent_row_count= m_examined_row_count= 0;

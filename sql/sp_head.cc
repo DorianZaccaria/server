@@ -2086,7 +2086,7 @@ sp_head::execute_procedure(THD *thd, List<Item> *args)
   ulonglong utime_before_sp_exec= thd->utime_after_lock;
   sp_rcontext *save_spcont, *octx;
   sp_rcontext *nctx = NULL;
-  bool save_enable_slow_log;
+  enum_slow_query_action save_slow_query_action;
   bool save_log_general= false;
   sp_package *pkg= get_package();
   DBUG_ENTER("sp_head::execute_procedure");
@@ -2241,20 +2241,18 @@ sp_head::execute_procedure(THD *thd, List<Item> *args)
                        m_name.str));
   }
 
-  save_enable_slow_log= thd->enable_slow_log;
+  save_slow_query_action= thd->slow_query_action;
 
   /*
     Disable slow log if:
-    - Slow logging is enabled (no change needed)
     - This is a normal SP (not event log)
     - If we have not explicitely disabled logging of SP
   */
-  if (save_enable_slow_log &&
-      ((!(m_flags & LOG_SLOW_STATEMENTS) &&
-        (thd->variables.log_slow_disabled_statements & LOG_SLOW_DISABLE_SP))))
+  if ((!(m_flags & LOG_SLOW_STATEMENTS) &&
+       (thd->variables.log_slow_disabled_statements & LOG_SLOW_DISABLE_SP)))
   {
     DBUG_PRINT("info", ("Disabling slow log for the execution"));
-    thd->enable_slow_log= FALSE;
+    thd->slow_query_action= SKIP;
   }
 
   /*
@@ -2289,7 +2287,7 @@ sp_head::execute_procedure(THD *thd, List<Item> *args)
 
   if (save_log_general)
     thd->variables.option_bits &= ~OPTION_LOG_OFF;
-  thd->enable_slow_log= save_enable_slow_log;
+  thd->slow_query_action= save_slow_query_action;
 
   /*
     In the case when we weren't able to employ reuse mechanism for
@@ -3481,7 +3479,7 @@ int
 sp_instr_stmt::execute(THD *thd, uint *nextp)
 {
   int res;
-  bool save_enable_slow_log;
+  enum_slow_query_action save_slow_query_action;
   const CSET_STRING query_backup= thd->query_string;
   Sub_statement_state backup_state;
   DBUG_ENTER("sp_instr_stmt::execute");
@@ -3492,7 +3490,7 @@ sp_instr_stmt::execute(THD *thd, uint *nextp)
   thd->profiling.set_query_source(m_query.str, m_query.length);
 #endif
 
-  save_enable_slow_log= thd->enable_slow_log;
+  save_slow_query_action= thd->slow_query_action;
   thd->store_slow_query_state(&backup_state);
 
   if (!(res= alloc_query(thd, m_query.str, m_query.length)) &&
@@ -3509,7 +3507,7 @@ sp_instr_stmt::execute(THD *thd, uint *nextp)
     {
       thd->reset_slow_query_state();
       res= m_lex_keeper.reset_lex_and_exec_core(thd, nextp, FALSE, this);
-      bool log_slow= !res && thd->enable_slow_log;
+      bool log_slow= !res && thd->slow_query_action != SKIP;
 
       /* Finalize server status flags after executing a statement. */
       if (log_slow || thd->get_stmt_da()->is_eof())
@@ -3529,10 +3527,10 @@ sp_instr_stmt::execute(THD *thd, uint *nextp)
         log_slow_statement(thd);
 
       /*
-        Restore enable_slow_log, that can be changed by a admin or call
+        Restore slow_query_action, that can be changed by a admin or call
         command
       */
-      thd->enable_slow_log= save_enable_slow_log;
+      thd->slow_query_action= save_slow_query_action;
 
       /* Add the number of rows to thd for the 'call' statistics */
       thd->add_slow_query_state(&backup_state);

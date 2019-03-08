@@ -764,7 +764,7 @@ THD::THD(my_thread_id id, bool is_wsrep_applier, bool skip_global_sys_var_lock)
   bzero(ha_data, sizeof(ha_data));
   mysys_var=0;
   binlog_evt_union.do_union= FALSE;
-  enable_slow_log= 0;
+  slow_query_action= SKIP;
   durability_property= HA_REGULAR_DURABILITY;
 
 #ifdef DBUG_ASSERT_EXISTS
@@ -5253,7 +5253,7 @@ void THD::reset_sub_statement_state(Sub_statement_state *backup,
   backup->option_bits=     variables.option_bits;
   backup->count_cuted_fields= count_cuted_fields;
   backup->in_sub_stmt=     in_sub_stmt;
-  backup->enable_slow_log= enable_slow_log;
+  backup->slow_query_action= slow_query_action;
   backup->limit_found_rows= limit_found_rows;
   backup->cuted_fields=     cuted_fields;
   backup->client_capabilities= client_capabilities;
@@ -5317,7 +5317,7 @@ void THD::restore_sub_statement_state(Sub_statement_state *backup)
   transaction.savepoints= backup->savepoints;
   variables.option_bits= backup->option_bits;
   in_sub_stmt=      backup->in_sub_stmt;
-  enable_slow_log=  backup->enable_slow_log;
+  slow_query_action=  backup->slow_query_action;
   first_successful_insert_id_in_prev_stmt= 
     backup->first_successful_insert_id_in_prev_stmt;
   first_successful_insert_id_in_cur_stmt= 

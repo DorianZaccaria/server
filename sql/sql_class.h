@@ -1663,6 +1663,7 @@ public:
 #define SUB_STMT_TRIGGER 1
 #define SUB_STMT_FUNCTION 2
 
+enum enum_slow_query_action { SKIP, COUNT, COUNT_AND_LOG };
 
 class Sub_statement_state
 {
@@ -1684,9 +1685,9 @@ public:
   ulong     query_plan_fsort_passes;
   ulong query_plan_flags; 
   uint in_sub_stmt;    /* 0,  SUB_STMT_TRIGGER or SUB_STMT_FUNCTION */
-  bool enable_slow_log;
   bool last_insert_id_used;
   enum enum_check_fields count_cuted_fields;
+  enum enum_slow_query_action slow_query_action;
 };
 
 
@@ -3017,6 +3018,8 @@ public:
   uint	     server_status,open_options;
   enum enum_thread_type system_thread;
   enum backup_stages current_backup_stage;
+  enum enum_slow_query_action slow_query_action;
+
   /*
     Current or next transaction isolation level.
     When a connection is established, the value is taken from
@@ -3148,7 +3151,6 @@ private:
   bool       charset_is_system_charset, charset_is_collation_connection;
   bool       charset_is_character_set_filesystem;
 public:
-  bool       enable_slow_log;    /* Enable slow log for current statement */
   bool	     abort_on_warning;
   bool 	     got_warning;       /* Set on call to push_warning() */
   /* set during loop of derived table processing */
