@@ -362,7 +362,7 @@ struct fil_space_t {
 			return false;
 		}
 
-		if (FSP_FLAGS_HAS_PAGE_COMPRESSION(expected)) {
+		if (is_compressed(expected) != is_compressed(flags)) {
 			return false;
 		}
 
@@ -376,8 +376,7 @@ struct fil_space_t {
 	{
 		ut_ad(!full_crc32(flags));
 
-		if (!full_crc32(expected)
-		    || FSP_FLAGS_HAS_PAGE_COMPRESSION(expected)) {
+		if (!full_crc32(expected)) {
 			return false;
 		}
 
@@ -387,6 +386,10 @@ struct fil_space_t {
 
 		if ((page_ssize == 0 && space_page_ssize != 5)
 		    || (page_ssize != 0 && (space_page_ssize != page_ssize))) {
+			return false;
+		}
+
+		if (is_compressed(flags) != is_compressed(expected)) {
 			return false;
 		}
 
@@ -487,6 +490,15 @@ struct fil_space_t {
 		an .ibd file and we are using the default innodb_page_size=16k. */
 		return(ssize == 0 || !is_ibd
 		       || srv_page_size != UNIV_PAGE_SIZE_ORIG);
+	}
+
+	static ulint get_compression_algo(ulint flags)
+	{
+		if (full_crc32(flags)) {
+			return FSP_FLAGS_FCRC32_GET_COMPRESSED_ALGO(flags);
+		}
+
+		return 0;
 	}
 };
 
@@ -647,6 +659,9 @@ or 64 bites of zero if no encryption */
 /** This overloads FIL_PAGE_FILE_FLUSH_LSN for RTREE Split Sequence Number */
 #define	FIL_RTREE_SPLIT_SEQ_NUM	FIL_PAGE_FILE_FLUSH_LSN_OR_KEY_VERSION
 
+/** This overloads FIL_PAGE_FILE_FLUSH_LSN for compressed page method */
+#define FIL_PAGE_COMP_ALGO	FIL_PAGE_FILE_FLUSH_LSN_OR_KEY_VERSION
+
 /** starting from 4.1.x this contains the space id of the page */
 #define FIL_PAGE_ARCH_LOG_NO_OR_SPACE_ID  34U
 
@@ -659,12 +674,28 @@ For non-encrypted page, it contains 0. */
 #define FIL_PAGE_FCRC32_KEY_VERSION	0
 
 /* Following are used when page compression is used */
+/** Number of bytes used to store actual payload data size on
+compressed pages. */
+#define FIL_PAGE_COMP_SIZE		0
+
+/** Number of bytes length to store actual compression info. */
+#define FIL_PAGE_COMP_METADATA_LEN		2
+
+/** Number of bytes used to store actual compression method. */
+#define FIL_PAGE_ENCRYPT_COMP_ALGO		2
+
+/** Number of bytes length to store actual compression info in encrypted page. */
+#define FIL_PAGE_ENCRYPT_COMP_METADATA_LEN	4
+
+#if 0
 #define FIL_PAGE_COMPRESSED_SIZE 2      /*!< Number of bytes used to store
 					actual payload data size on
 					compressed pages. */
 #define FIL_PAGE_COMPRESSION_METHOD_SIZE 2
 					/*!< Number of bytes used to store
 					actual compression method. */
+#endif
+
 /* @} */
 /** File page trailer @{ */
 #define FIL_PAGE_END_LSN_OLD_CHKSUM 8	/*!< the low 4 bytes of this are used
@@ -715,6 +746,8 @@ For non-encrypted page, it contains 0. */
 Note: FIL_PAGE_TYPE_INSTANT maps to the same as FIL_PAGE_INDEX. */
 #define FIL_PAGE_TYPE_LAST	FIL_PAGE_TYPE_UNKNOWN
 					/*!< Last page type */
+/** Used to indicate compressed page in full crc32 format. */
+#define FIL_PAGE_COMPRESS_FCRC32_MARKER	15
 /* @} */
 
 /** @return whether the page type is B-tree or R-tree index */
