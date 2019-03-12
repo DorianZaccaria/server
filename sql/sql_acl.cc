@@ -8538,7 +8538,6 @@ static int open_grant_tables(THD *thd, TABLE_LIST *tables,
   }
 
   int prev= -1;
-  bzero(tables, sizeof(TABLE_LIST) * TABLES_MAX);
   for (int cur=TABLES_MAX-1, mask= 1 << cur; mask; cur--, mask >>= 1)
   {
     if ((tables_to_open & mask) == 0)
